@@ -118,7 +118,7 @@ struct ImportInputData *ImportInputNewone;
 void saveImportToFile(void);
 
 // User Names  functions and global variables declarations
-int fillFromUserNames (void);
+void fillFromUserNames (void);
 struct userNamesData *createUserNamesStruct(void);
 struct userNamesData *userNamesFirst;
 struct userNamesData *userNamesCurrent;
@@ -132,8 +132,6 @@ void createOutputFileForJIRAImport (void);
 char* jiraFilename;
 char* QJTFilename;
 char* debugflag;
-
-
 char* finalOuputFilename="ImportFinalOutput.csv";
 char* userNamesFilename="UserNames.txt";
 
@@ -145,7 +143,6 @@ Description:
 int main(int argc, char *argv[])
 
 {
-int retval=0;
 /* createJiraStruct first jira structure */
 jiraInputNewone = createJiraStruct();
 jiraInputFirst = jiraInputNewone;
@@ -185,7 +182,9 @@ printf("Welcome to JIRA import file generator\n");
 printf("*************************************\n");
 
 //createUserNamesStruct();
-retval = fillFromUserNames();
+fillFromUserNames();
+
+  
 fillFromAllJiraBugs(jiraFilename);
 createPrimaryModEntry();
 fillFromQJT(QJTFilename);
@@ -212,7 +211,7 @@ Function:
 Description:read from ALLJIraBugs file
 *******************************************/
 
-int fillFromUserNames (void)
+void fillFromUserNames (void)
 {
 char lineBuffer[lineBufferSize] ;
 const char token[3] = "\t";
@@ -237,10 +236,11 @@ while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
     {
     record = strtok(entry,token);
     userNamesCurrent->numOfEntries = structLineCnt;
+    columnsFound=0;
+
     while(record != NULL)
         {
         recordSize=strlen(record);
-
         if(structColumnEntry == 0)
             {
             userNamesCurrent->userName = (char *)malloc(recordSize+2);
@@ -276,12 +276,11 @@ while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
 if(columnsFound < 3)
     {
     printf("NOT ENOUGH Columns in '%s'\n",userNamesFilename);
-    return(0);
+    exit(1);
     }
 
 printf("%d users found in '%s'\n",structLineCnt,userNamesFilename);
 fclose(fstream);
-return(1);
 }
 
 
