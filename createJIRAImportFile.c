@@ -22,8 +22,30 @@
 #define QJTInputDataADDITIONAL_COLUMN 7
 #define QJTInputDataPAD_COLUMN 8
 
+#define ImportOutputMaxColumns 19
 #define lineBufferSize 2048
 
+const char *ImportOutputArray []= 
+                    {"Project",
+                     "Issue Type",
+                     "Summary",
+                     "Desciption",
+                     "Epic Link",
+                     "Severity",
+                     "Reporter",
+                     "Found in Environment",
+                     "Found in Phase",
+                     "Labels",
+                     "Priority",
+                     "Activity",
+                     "Custom1",
+                     "Custom2",
+                     "Custom3",
+                     "Custom4",
+                     "Custom5",
+                     "Edition",
+                     "Primary"
+                  };
 /******************************************
 GLOBALS
 *******************************************/
@@ -128,6 +150,8 @@ void saveUserNamesToFile(void);
 //General functions and globals
 void printCurrentStructAddresses(struct jiraInputData*);
 void createOutputFileForJIRAImport (void);
+void validateFinalOutputFile(void);
+
 //variables used to hold main passed in arguments
 char* jiraFilename;
 char* QJTFilename;
@@ -169,8 +193,6 @@ userNamesCurrent->next=NULL;
 
 jiraFilename = argv[1];
 QJTFilename = argv[2];
-//debugflag = argv[3];
-//printf("argv1 %s  --------  argv2 %s   ---------- argv3%s\n",argv[1], argv[2],argv[3]);
 
 if(argc <3)
     {
@@ -181,16 +203,14 @@ printf("*************************************\n");
 printf("Welcome to JIRA import file generator\n");
 printf("*************************************\n");
 
-//createUserNamesStruct();
-fillFromUserNames();
-
-  
+fillFromUserNames(); 
 fillFromAllJiraBugs(jiraFilename);
 createPrimaryModEntry();
 fillFromQJT(QJTFilename);
 
 createFinalStructureForOutput();
 createOutputFileForJIRAImport();
+validateFinalOutputFile();
 
 if(argv[3] != NULL)
     {   
@@ -207,8 +227,9 @@ return 0 ;
 }
 
 /******************************************
-Function:
-Description:read from ALLJIraBugs file
+Function: 
+Description:create username lookup structure to be used in final process to convert username to Jira 
+            encoded names
 *******************************************/
 
 void fillFromUserNames (void)
@@ -219,7 +240,7 @@ char *record,*entry;
 int structLineCnt=0,structColumnEntry=0,columnsFound=0;
 size_t recordSize;
 size_t entrySize;
-size_t stringSize=0;
+//size_t stringSize=0;
 //setup current to be first structure
 userNamesCurrent = userNamesFirst;
 
@@ -229,7 +250,7 @@ if(fstream == NULL)
     {
     printf("\n Failed to open file '%s' \n",userNamesFilename);
     printf("\n Please correct and try again\n");
-        exit (1) ;
+    exit (1) ;
     }
 printf("\n********** Processing '%s' **********\n",userNamesFilename);
 while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
@@ -262,11 +283,10 @@ while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
             entrySize = strlcpy(userNamesCurrent->pad , record, recordSize+1);
             columnsFound++;
             }
- //  printf("Row= %d Col= %d  %s ----  %s  RSIZE=%lu ESIZE=%lu\n",structLineCnt,structColumnEntry,userNamesCurrent->userName,record,recordSize,entrySize);   
-
         record = strtok(NULL,token);
         structColumnEntry++;
       }
+    //malloc a new structure for next line
     userNamesNewone = createUserNamesStruct();
     userNamesCurrent->next = userNamesNewone;
     userNamesCurrent=userNamesNewone;
@@ -286,12 +306,13 @@ fclose(fstream);
 
 /******************************************
 Function:
-Description:read from ALLJIraBugs file
+Description:read from ALLJIraBugs file and create the structure to be used for final IMport file
 *******************************************/
 
 void fillFromAllJiraBugs(char* jiraFilename)
 {
 char lineBuffer[lineBufferSize] ;
+//using Tab token for all files
 const char token[3] = "\t";
 char *record,*entry;
 int structLineCnt=0,structColumnEntry=0;
@@ -351,13 +372,14 @@ while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
         record = strtok(NULL,token);
         structColumnEntry++;
         } 
+    //malloc a new structure for next line
     jiraInputNewone = createJiraStruct();
     jiraInputCurrent->next = jiraInputNewone;
     jiraInputCurrent=jiraInputNewone;
     structLineCnt++;
     structColumnEntry=0;
     }
-printf("%d entries found in '%s'\n",structLineCnt, jiraFilename);
+printf("%d entries found in '%s'\n",structLineCnt-1, jiraFilename);
 fclose(fstream);
 }
 
@@ -365,7 +387,8 @@ fclose(fstream);
 /* read from QJT file*/
 /******************************************
 Function:
-Description:
+Description:read from QJT file file and create the structure to be used for final Import file
+            This file contains multiple fields like ISBN and Reported that will be used in final output
 *******************************************/
 void fillFromQJT(char* QJTfilename)
 {
@@ -444,13 +467,14 @@ while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
         record = strtok(NULL,token);
         structColumnEntry++;
         }   
+     //malloc a new structure for next line
     QJTInputNewone = createQJTStruct();
     QJTInputCurrent->next = QJTInputNewone;
     QJTInputCurrent=QJTInputNewone; 
     structLineCnt++;
     structColumnEntry=0;
     }
-printf("%d QJT entries found in '%s'\n", structLineCnt+1,QJTFilename);
+printf("%d QJT entries found in '%s'\n", structLineCnt-1,QJTFilename);
 
 fclose(fstream);
 }
@@ -459,7 +483,9 @@ fclose(fstream);
 /* create final output structure*/
 /******************************************
 Function:
-Description:
+Description:uses the JIRA structure as the beggining point. It does lookups to find a match of the "primary" field 
+            int the JIRA file finds a match in the QJT structures. It fills in the Import structures with required
+            fields to complate the import ouput.
 *******************************************/
 void createFinalStructureForOutput()
 {
@@ -484,7 +510,7 @@ printf("\n********** Cross Referencing file '%s' and '%s' **********\n",QJTFilen
 
 while(jiraInputCurrent->next != NULL)
     {
-
+    // lookupQJTEntry will return a pointer to temporary structure with field from QJT reuiqred to fill in Import structure
     entryfound = lookupQJTEntry(ImportQJTFieldsPtr, jiraInputCurrent->primaryMod,jiraInputCurrent->numOfEntries);
     if(entryfound==1)
         {
@@ -537,7 +563,7 @@ while(jiraInputCurrent->next != NULL)
         ImportInputCurrent->primary = (char *)malloc(stringSize+2);
         memset(ImportInputCurrent->primary,0,stringSize+2);
         strcpy(ImportInputCurrent->primary, jiraInputCurrent->primary);
-
+        //malloc a new structure for next line
         ImportInputNewone = createImportStruct();
         ImportInputCurrent->next = ImportInputNewone;
         ImportInputCurrent=ImportInputNewone;
@@ -550,7 +576,7 @@ while(jiraInputCurrent->next != NULL)
     jiraInputCurrent = jiraInputCurrent->next; 
     }
 //plus 1 on line count because first row is the header on not processed
-printf("%d JIRA entries found in '%s'\n", structLineCnt+1,QJTFilename);
+printf("%d JIRA entries found in '%s'\n", structLineCnt,QJTFilename);
 }
 /******************************************
 Function:
@@ -572,33 +598,25 @@ localUserNamesFirst=userNamesFirst;
 
 //check for valid primaryMod key and leave
 stringSize = strlen(jiraPrimaryMod);
-//printf("SIZEOF = %lu\n",stringSize);
-//primaryMod must be at least 5 charactes
-//printf("\nGOING IN1 to LOOK");
 
 if(stringSize >= 5)
     {
-//printf("\nGOING IN2 to LOOK");
 
     while(localQJTInputCurrent->next != NULL)
         {
-//printf("\nGOING IN2 to LOOK i=%d,X=%d\n",i,x);
         if(strcmp(localQJTInputCurrent->primary,jiraPrimaryMod) == 0)
             {
-//printf("\nGOING IN3 to LOOK i=%d,X=%d P1=%p  P2=%p P3=%p\n",i,x,ImportQJTFieldsPtr,localQJTInputCurrent, localUserNamesCurrent );
-
             entryfound=1;
             strcpy(ImportQJTFieldsPtr->epicLink, localQJTInputCurrent->title);
             strcpy(name, localQJTInputCurrent->assignedPM);
             while(localUserNamesCurrent->next != NULL)
                 {
-//printf("\nGOING IN4 to LOOK i=%d,X=%d L=%s N=%s\n",i,x,localQJTInputCurrent->assignedPM,name);
                 //set this to 1 tp get us out of loop
                 if(strcmp(name, localUserNamesCurrent->userName) == 0 )
                     { 
                     nameLookupFound=1;              
-//printf("\nGOING IN5 to LOOK i=%d,X=%d L=%s N=%s\n",i,x,localUserNamesCurrent->jiraUserName,name);
                     strcpy(ImportQJTFieldsPtr->reporter, localUserNamesCurrent->jiraUserName);
+                    // we found the name entry so break out and look up next record.
                     break;
                     }
                 i++;
@@ -609,7 +627,6 @@ if(stringSize >= 5)
                 strcpy(ImportQJTFieldsPtr->reporter, userNamesFirst->jiraUserName);
                 printf("\nUsername lookup failed for AssingedPM '%s' line %d of '%s' Primary %s\n",name, x+1,QJTFilename,jiraPrimaryMod);
                 printf("Assigning to %s\n\n",ImportQJTFieldsPtr->reporter);
-//printf("\nGOING IN6 to LOOK i=%d,X=%d L=%s N=%s\n",i,x,userNamesFirst->jiraUserName,name);
                 }
             strcpy(ImportQJTFieldsPtr->ISBN, localQJTInputCurrent->ISBN);
             strcpy(ImportQJTFieldsPtr->demandID, localQJTInputCurrent->demandID);
@@ -623,17 +640,11 @@ if(stringSize >= 5)
                 break;
         }
     }
-//else
-  //  {
-  //  printf("Lookup failed with  invalid primary %lu  line %d File %s\n",stringSize,rowNumber+1,jiraFilename);
-  //  }
-//printf("ENTRY ITERATOR = %d  NAME ITERATOR = %d \n",x,i);
-
 return(entryfound);
 }
 /******************************************
 Function:
-Description:
+Description: creates new structure and malloc memory for linked list
 *******************************************/
 
 /* Allocate storage for one new structure */
@@ -646,7 +657,7 @@ memset(ptr,0,sizeof(struct jiraInputData));
 
 if( ptr == NULL)
 	{
-	puts("Memory error");
+	puts("\nInternal Memory Allocation Error\n");
 	exit(1);
 	}
 ptr->next = NULL;
@@ -654,7 +665,7 @@ return(ptr);
 }
 /******************************************
 Function:
-Description:
+Description:creates new structure and malloc memory for linked list
 *******************************************/
 
 /* Allocate storage for one new structure */
@@ -665,11 +676,9 @@ struct QJTInputData *ptr;
 ptr = (struct QJTInputData *)malloc(sizeof(struct QJTInputData));
 memset(ptr,0,sizeof(struct QJTInputData));
 
- //  printf("\n\nMAIN MALLOC=%lu POINTER=%p\n",sizeof(struct jiraInputData), ptr);
-
 if( ptr == NULL)
     {
-    puts("Memory error");
+    puts("\nInternal Memory Allocation Error\n");
     exit(1);
     }
  ptr->next = NULL;
@@ -677,7 +686,7 @@ return(ptr);
 }
 /******************************************
 Function:
-Description:
+Description:creates new structure and malloc memory for linked list
 *******************************************/
 struct ImportInputData *createImportStruct(void)
 {
@@ -685,11 +694,10 @@ struct ImportInputData *ptr;
 ptr = (struct ImportInputData *)malloc(sizeof(struct ImportInputData));
 memset(ptr,0,sizeof(struct ImportInputData));
 
-
 if( ptr == NULL)
     {
-        puts("Memory error");
-        exit(1);
+    puts("\nInternal Memory Allocation Error\n");
+    exit(1);
     }
 ptr->next = NULL;
 return(ptr);
@@ -697,7 +705,7 @@ return(ptr);
 
 /******************************************
 Function:
-Description:
+Description:creates new structure and malloc memory for linked list
 *******************************************/
 
 struct userNamesData *createUserNamesStruct(void)
@@ -709,7 +717,7 @@ memset(ptr,0,sizeof(struct userNamesData));
 
 if( ptr == NULL)
     {
-    puts("Memory error");
+    puts("\nInternal Memory Allocation Error\n");
     exit(1);
     }
 ptr->next = NULL;
@@ -717,7 +725,7 @@ return(ptr);
 }
 /******************************************
 Function:
-Description:
+Description: create output file used for debugging
 *******************************************/
 void saveUserNamesToFile(void)
 {
@@ -745,7 +753,7 @@ fclose(fp);
 }
 /******************************************
 Function:
-Description:
+Description:create output file used for debugging
 *******************************************/
 void saveJiraToFile(void)
 {
@@ -772,7 +780,7 @@ fclose(fp);
 }
 /******************************************
 Function:
-Description:
+Description:create output file used for debugging
 *******************************************/
 void saveQJTToFile(void)
 {
@@ -796,7 +804,7 @@ fclose(fp);
 }
 /******************************************
 Function:
-Description:
+Description:create output file used for debugging
 *******************************************/
 void saveImportToFile(void)
 {
@@ -820,7 +828,8 @@ fclose(fp);
 }
 /******************************************
 Function:
-Description:
+Description: This function takes "primary" field from JIRA file and appends a "-C, -P, -I" basaed on Sheetname.
+            This allows for a match in the QJT file which contains the suffixes.
 *******************************************/
 void createPrimaryModEntry(void)
 {
@@ -836,7 +845,6 @@ while(jiraInputCurrent->next != NULL)
 // check to make sure we have a valid primary entry
     if(stringSize == 5)
         {
-    //   printf("SSIZE=%lu\n",stringSize);
         strcpy(jiraInputCurrent->primaryMod,jiraInputCurrent->primary);
         if (strcmp(jiraInputCurrent->sheetName ,"JIRA Copyediting") == 0)
             strcat(jiraInputCurrent->primaryMod,"-C");
@@ -845,13 +853,8 @@ while(jiraInputCurrent->next != NULL)
         else if (strcmp(jiraInputCurrent->sheetName, "JIRA Proofreading") == 0)
             strcat(jiraInputCurrent->primaryMod,"-P");
         }
-      //  else
-      //  {
-      //  printf("No Primary field found in file %s line %d \n",jiraFilename,jiraInputCurrent->numOfEntries+1);
-      //  }
     jiraInputCurrent = jiraInputCurrent->next;
-    }
-   
+    } 
 }
 /******************************************
 Function:
@@ -888,7 +891,7 @@ fclose(fp);
 }
 /******************************************
 Function:
-Description:
+Description: for debugging
 *******************************************/
 
 void printCurrentStructAddresses(struct jiraInputData  *structPtr)
@@ -901,4 +904,50 @@ printf("chapter=%p \n",structPtr->chapter);
 printf("summary=%p \n",structPtr->summary);
 printf("additional=%p \n",structPtr->additional);
 printf("structnext=%p \n\n\n",structPtr->next);
+}
+
+/******************************************
+Function:
+Description: for debugging
+*******************************************/
+
+void validateFinalOutputFile(void)
+{
+char lineBuffer[lineBufferSize] ;
+const char token[2] = ",";
+int structLineCnt=0,structColumnEntry=0;
+size_t  recordSize=0;
+char *record,*entry;
+
+FILE *fstream = fopen(finalOuputFilename,"r");
+
+if(fstream == NULL)
+    {
+    printf("\n Failed to open file '%s' \n",finalOuputFilename);
+    printf("\n Please correct and try again\n");
+    exit (1) ;
+    }
+printf("\n********** Scanning Final Output File '%s' **********\n",finalOuputFilename);
+while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
+    {
+   record = strtok(entry,token);
+    while(record != NULL)
+        {
+        recordSize=strlen(record);
+        if(strcmp (record, " ")== 0)
+            { 
+            printf("Blank column value found at line %d column %s of file '%s'\n", structLineCnt+1,ImportOutputArray[structColumnEntry],finalOuputFilename);          
+            }
+        record = strtok(NULL,token);
+        if(structColumnEntry == ImportOutputMaxColumns-1)
+            // done scanning this row for blank column value
+            break;
+        structColumnEntry++;
+        }    
+    structLineCnt++;
+    structColumnEntry=0;
+    }
+printf("%d lines processed in '%s'\n", structLineCnt-1,finalOuputFilename);
+
+fclose(fstream);
 }
