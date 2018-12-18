@@ -251,7 +251,9 @@ if(fstream == NULL)
     printf("\n Please correct and try again\n");
     exit (1) ;
     }
-printf("\n********** Processing '%s' **********\n",userNamesFilename);
+printf("\n----------------------------------------------------------\n");
+printf("********** Processing '%s' **********\n",userNamesFilename);
+printf("------------------------------------------------------------\n");
 while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
     {
     record = strtok(entry,token);
@@ -328,7 +330,9 @@ if(fstream == NULL)
     printf("\n Please correct and try again\n");
         exit (1) ;
     }
-printf("\n********** Processing '%s' **********\n",jiraFilename);
+printf("\n----------------------------------------------------------\n");
+printf("********** Processing '%s' **********\n",jiraFilename);
+printf("----------------------------------------------------------\n");
 while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
     {
     record = strtok(entry,token);
@@ -409,7 +413,9 @@ if(fstream == NULL)
     printf("\n Please correct and try again\n");
     exit (1) ;
     }
-printf("\n********** Processing '%s' **********\n",QJTFilename);
+printf("\n----------------------------------------------------------\n");
+printf("********** Processing '%s' **********\n",QJTFilename);
+printf("----------------------------------------------------------\n");
 while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
     {
    record = strtok(entry,token);
@@ -504,7 +510,9 @@ QJTInputCurrent = QJTInputCurrent->next;
 
 ImportInputCurrent = ImportInputFirst;
 
-printf("\n********** Cross Referencing file '%s' and '%s' **********\n",QJTFilename,jiraFilename);
+printf("\n----------------------------------------------------------\n");
+printf("********** Cross Referencing file '%s' and '%s' **********\n",QJTFilename,jiraFilename);
+printf("----------------------------------------------------------\n");
 
 
 while(jiraInputCurrent->next != NULL)
@@ -870,7 +878,9 @@ if(fp == NULL)
     printf("\n Failed to open file '%s' \n",finalOuputFilename);
     printf("\n Please make sure permission to create file is available\n");
     }
-printf("\n********** Creating '%s' **********\n",finalOuputFilename);
+printf("\n----------------------------------------------------------\n");
+printf("********** Creating '%s' **********\n",finalOuputFilename);
+printf("----------------------------------------------------------\n");
 
 fprintf(fp,"%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,\n","Project","Issue Type","Summary","Description","Epic Link","Severity","Reporter","Found In Environment","Found In Phase","Labels","Priority","Activity","Custom1","Custom2","Custom3","Custom4","Custom5","Edition","Primary");
 
@@ -884,7 +894,7 @@ while(ptr->next != NULL)
     i++;
     ptr = ptr->next;
     }
-printf("%d JIRA entries written to '%s'\n", i,QJTFilename);
+printf("%d JIRA entries written to '%s'\n", i,finalOuputFilename);
 
 fclose(fp);
 }
@@ -926,7 +936,9 @@ if(fstream == NULL)
     printf("\n Please correct and try again\n");
     exit (1) ;
     }
-printf("\n********** Scanning Final Output File '%s' **********\n",finalOuputFilename);
+printf("\n----------------------------------------------------------\n");
+printf("********** Scanning Final Output File '%s' **********\n",finalOuputFilename);
+printf("----------------------------------------------------------\n");
 while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
     {
    record = strtok(entry,token);
