@@ -11,7 +11,6 @@
 #define jiraInputDataADDITIONAL_COLUMN 4
 #define jiraInputDataPAD_COLUMN 5
 
-
 #define QJTInputDataPRIMARY_COLUMN 0
 #define QJTInputDataASSIGNEDPM_COLUMN 1
 #define QJTInputDataTITLE_COLUMN 2
