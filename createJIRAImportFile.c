@@ -1,15 +1,37 @@
-//created by Paul Marichal 12/12/2018
+/*
+Copyright (c) 2018 PAul Marichal
 
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+*/
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+
 
 #define jiraInputDataSHEETNAME_COLUMN 0
 #define jiraInputDataPRIMARY_COLUMN 1
 #define jiraInputDataCHAPTER_COLUMN 2
 #define jiraInputDataSUMMARY_COLUMN 3
 #define jiraInputDataADDITIONAL_COLUMN 4
-#define jiraInputDataPAD_COLUMN 5
+#define jiraInputDataPRIMARYMOD_COLUMN 5
+#define jiraInputDataPAD_COLUMN 6
 
 #define QJTInputDataPRIMARY_COLUMN 0
 #define QJTInputDataASSIGNEDPM_COLUMN 1
@@ -21,8 +43,18 @@
 #define QJTInputDataADDITIONAL_COLUMN 7
 #define QJTInputDataPAD_COLUMN 8
 
-#define ImportOutputMaxColumns 19
-#define lineBufferSize 2048
+#define userNameInputDataNAME_COLUMN 0
+#define userNameInputDataJIRANAME_COLUMN 1
+#define userNameInputDataPAD_COLUMN 2
+
+#define EpicInputDataISSUEKEY_QACOLUMN 1
+#define EpicInputDataSUMMARY_QACOLUMN 3
+
+#define EpicInputDataSUMMARY_OTHERCOLUMN 4
+#define EpicInputDataISSUEKEY_OTHERCOLUMN 1
+
+#define ImportOutputMaxColumns 20
+#define lineBufferSize 4000
 
 const char *ImportOutputArray []= 
                     {"Project",
@@ -89,13 +121,22 @@ struct ImportInputData
      char *chapter;
      char *edition;
      char *primary;
+     char *title;
      char *pad;
      struct ImportInputData *next;
 } ;
 
+struct epicInputData
+ {
+     int numOfEntries;
+     char *summary;
+     char *issueKey;
+     char *pad;
+     struct epicInputData *next;
+} ;
 struct ImportQJTFields
     {
-    char epicLink[200];
+    char epicLink[300];
     char reporter[100];
     char ISBN[50];
     char demandID[20];
@@ -131,7 +172,7 @@ void saveQJTToFile(void);
 // Import  functions and global variables declarations
 void createOutputFileForJIRAImport (void);
 void createFinalStructureForOutput(void);
-int lookupQJTEntry (struct ImportQJTFields *, char*, int);
+int lookupQJTEntry (struct ImportQJTFields *, char*);
 struct ImportInputData *createImportStruct(void);
 struct ImportInputData *ImportInputFirst;
 struct ImportInputData *ImportInputCurrent;
@@ -146,23 +187,38 @@ struct userNamesData *userNamesCurrent;
 struct userNamesData *userNamesNewone;
 void saveUserNamesToFile(void);
 
+// ALLJira functions and global variables delclarations
+void fillFromAllEpics();
+struct epicInputData *createEpicStruct(void);
+struct epicInputData *epicInputFirst;
+struct epicInputData *epicInputCurrent;
+struct epicInputData *epicInputNewone;
+void saveEpicToFile(void);
+
 //General functions and globals
 void printCurrentStructAddresses(struct jiraInputData*);
 void createOutputFileForJIRAImport (void);
 void validateFinalOutputFile(void);
+int matchEpic(char text[], char pattern[]);
+
 
 //variables used to hold main passed in arguments
 char* jiraFilename;
 char* QJTFilename;
+char* userNamesFilename;
+char epicFilename[3][100] ={
+                         "File1                              ",
+                         "File2                               ",
+                         "File3                            "
+                     };
+#define NumOfEpicFiles 3
+char* finalOuputFilename;
 char* debugflag;
-char* finalOuputFilename="ImportFinalOutput.csv";
-char* userNamesFilename="UserNames.txt";
 
 /******************************************
 Function:
 Description:
 *******************************************/
-//int main(int argc, char *argv[],char *agrv[])
 int main(int argc, char *argv[])
 
 {
@@ -190,12 +246,28 @@ userNamesFirst = userNamesNewone;
 userNamesCurrent = userNamesNewone;
 userNamesCurrent->next=NULL;
 
+/* createJiraStruct first jira structure */
+epicInputNewone = createEpicStruct();
+epicInputFirst = epicInputNewone;
+epicInputCurrent = epicInputNewone;
+epicInputCurrent->next=NULL;
+
 jiraFilename = argv[1];
 QJTFilename = argv[2];
+userNamesFilename = argv[3];
+//get the 3 filenames passed from the script
 
-if(argc <3)
+strcpy(epicFilename[0], argv[4]);
+strcpy(epicFilename[1], argv[5]);
+strcpy(epicFilename[2], argv[6]);
+
+//printf("EPICS FILES = %s  %s  %s     \n",epicFilename[0],epicFilename[1],epicFilename[2]); 
+
+finalOuputFilename = argv[7];
+
+if(argc <7)
     {
-    printf("Need Jira and QJT filenames\n"); 
+    printf("Check script to make sure all 7 filenames are passed in\n"); 
     exit(1);
     }
 printf("*************************************\n");
@@ -206,23 +278,25 @@ fillFromUserNames();
 fillFromAllJiraBugs(jiraFilename);
 createPrimaryModEntry();
 fillFromQJT(QJTFilename);
+fillFromAllEpics();
 
 createFinalStructureForOutput();
 createOutputFileForJIRAImport();
 validateFinalOutputFile();
 
-if(argv[3] != NULL)
+if(argv[8] != NULL)
     {   
-    if(strcmp(argv[3],"1") == 0)
+    if(strcmp(argv[8],"1") == 0)
         {
         printf("CREATING debug files\n");
         saveUserNamesToFile();
         saveJiraToFile();
         saveQJTToFile();
         saveImportToFile();
+        saveEpicToFile();
         }
     } 
-return 0 ;
+
 }
 
 /******************************************
@@ -253,38 +327,39 @@ if(fstream == NULL)
     }
 printf("\n----------------------------------------------------------\n");
 printf("********** Processing '%s' **********\n",userNamesFilename);
-printf("------------------------------------------------------------\n");
+printf("----------------------------------------------------------\n");
 while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
     {
-    record = strtok(entry,token);
+    record = strsep(&entry,token);
+
     userNamesCurrent->numOfEntries = structLineCnt;
     columnsFound=0;
 
     while(record != NULL)
         {
         recordSize=strlen(record);
-        if(structColumnEntry == 0)
+        if(structColumnEntry == userNameInputDataNAME_COLUMN)
             {
             userNamesCurrent->userName = (char *)malloc(recordSize+2);
             memset(userNamesCurrent->userName,0,recordSize+2);
             entrySize = strlcpy(userNamesCurrent->userName , record, recordSize+1);
             columnsFound++;
             }
-        else if(structColumnEntry == 1)
+        else if(structColumnEntry == userNameInputDataJIRANAME_COLUMN)
             {
             userNamesCurrent->jiraUserName = (char *)malloc(recordSize+2);
             memset(userNamesCurrent->jiraUserName,0,recordSize+2);
             entrySize = strlcpy(userNamesCurrent->jiraUserName , record, recordSize+1);
             columnsFound++;
            }
-        else if(structColumnEntry == 2)
+        else if(structColumnEntry == userNameInputDataPAD_COLUMN)
             {
             userNamesCurrent->pad = (char *)malloc(recordSize+2);
             memset(userNamesCurrent->pad,0,recordSize+2);
-            entrySize = strlcpy(userNamesCurrent->pad , record, recordSize+1);
+            entrySize = strlcpy(userNamesCurrent->pad , "N/A", recordSize+1);
             columnsFound++;
             }
-        record = strtok(NULL,token);
+        record = strsep(&entry,token);
         structColumnEntry++;
       }
     //malloc a new structure for next line
@@ -296,7 +371,7 @@ while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
     }
 if(columnsFound < 3)
     {
-    printf("NOT ENOUGH Columns in '%s'\n",userNamesFilename);
+    printf("NOT Enough Columns in '%s'\n",userNamesFilename);
     exit(1);
     }
 
@@ -335,7 +410,8 @@ printf("********** Processing '%s' **********\n",jiraFilename);
 printf("----------------------------------------------------------\n");
 while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
     {
-    record = strtok(entry,token);
+    record = strsep(&entry,token);
+
     jiraInputCurrent->numOfEntries = structLineCnt;
     while(record != NULL)
        {
@@ -371,8 +447,13 @@ while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
             memset(jiraInputCurrent->additional,0,recordSize+2);
             entrySize = strlcpy(jiraInputCurrent->additional, record, recordSize+1);
             }
-
-        record = strtok(NULL,token);
+        else if(structColumnEntry == jiraInputDataPRIMARYMOD_COLUMN)
+            {
+            jiraInputCurrent->primaryMod = (char *)malloc(recordSize+2);
+            memset(jiraInputCurrent->primaryMod,0,recordSize+2);
+            entrySize = strlcpy(jiraInputCurrent->primaryMod, "N/A", recordSize+1);
+            }
+        record = strsep(&entry,token);
         structColumnEntry++;
         } 
     //malloc a new structure for next line
@@ -386,6 +467,106 @@ printf("%d entries found in '%s'\n",structLineCnt-1, jiraFilename);
 fclose(fstream);
 }
 
+/******************************************
+Function:
+Description:read from ALLJIraBugs file and create the structure to be used for final IMport file
+*******************************************/
+void fillFromAllEpics(char* jiraFilename)
+{
+char lineBuffer[lineBufferSize] ;
+//using Tab token for all files
+const char token[3] = "\t";
+char *record,*entry;
+int structLineCnt=0,structColumnEntry=0 ,fileNum=0;
+size_t recordSize;
+size_t entrySize; 
+//setup current to be first structure
+FILE *fstream;
+
+epicInputCurrent = epicInputFirst;
+
+for(fileNum = 0 ;fileNum < NumOfEpicFiles; fileNum++ )
+    {
+    fstream = fopen(epicFilename[fileNum],"r");
+
+    if(fstream == NULL)
+        {
+        printf("\n Failed to open file '%s' \n",epicFilename[fileNum]);
+        printf("\n Please correct and try again\n");
+            exit (1) ;
+        }
+    printf("\n----------------------------------------------------------\n");
+    printf("********** Processing '%s' **********\n",epicFilename[fileNum]);
+    printf("----------------------------------------------------------\n");
+    if(fileNum == 0)
+        {
+        while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
+            {
+            record = strsep(&entry,token);
+            epicInputCurrent->numOfEntries = structLineCnt;
+            while(record != NULL)
+               {
+               recordSize=strlen(record);
+               if(structColumnEntry == EpicInputDataSUMMARY_QACOLUMN)
+                    {
+                    epicInputCurrent->summary = (char *)malloc(recordSize+2);
+                    memset(epicInputCurrent->summary,0,recordSize+2);
+                    entrySize = strlcpy(epicInputCurrent->summary , record, recordSize+1);
+                    }
+               else if(structColumnEntry == EpicInputDataISSUEKEY_QACOLUMN)
+                    {
+                    epicInputCurrent->issueKey = (char *)malloc(recordSize+2);
+                    memset(epicInputCurrent->issueKey,0,recordSize+2);
+                    entrySize = strlcpy(epicInputCurrent->issueKey , record, recordSize+1);
+                    }
+                record = strsep(&entry,token);
+                structColumnEntry++;
+                } 
+            //malloc a new structure for next line
+            epicInputNewone = createEpicStruct();
+            epicInputCurrent->next = epicInputNewone;
+            epicInputCurrent=epicInputNewone;
+            structLineCnt++;
+            structColumnEntry=0;
+            }
+        }
+    if((fileNum == 1) || (fileNum == 2))
+        {
+
+        while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
+            {
+            record = strsep(&entry,token);
+            epicInputCurrent->numOfEntries = structLineCnt;
+            while(record != NULL)
+               {
+               recordSize=strlen(record);
+               if(structColumnEntry == EpicInputDataSUMMARY_OTHERCOLUMN)
+                    {
+                   epicInputCurrent->summary = (char *)malloc(recordSize+2);
+                    memset(epicInputCurrent->summary,0,recordSize+2);
+                    entrySize = strlcpy(epicInputCurrent->summary , record, recordSize+1);
+                    }
+               else if(structColumnEntry == EpicInputDataISSUEKEY_OTHERCOLUMN)
+                    {
+                    epicInputCurrent->issueKey = (char *)malloc(recordSize+2);
+                    memset(epicInputCurrent->issueKey,0,recordSize+2);
+                    entrySize = strlcpy(epicInputCurrent->issueKey , record, recordSize+1);
+                    }
+                record = strsep(&entry,token);
+                structColumnEntry++;
+                } 
+            //malloc a new structure for next line
+            epicInputNewone = createEpicStruct();
+            epicInputCurrent->next = epicInputNewone;
+            epicInputCurrent=epicInputNewone;
+            structLineCnt++;
+            structColumnEntry=0;
+            }
+        }
+    printf("%d Epics found in '%s'\n",structLineCnt-1, epicFilename[fileNum]);
+    fclose(fstream);
+    }
+}
 
 /* read from QJT file*/
 /******************************************
@@ -418,14 +599,11 @@ printf("********** Processing '%s' **********\n",QJTFilename);
 printf("----------------------------------------------------------\n");
 while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
     {
-   record = strtok(entry,token);
-   QJTInputCurrent->numOfEntries = structLineCnt;
-
+    record = strsep(&entry,token);
+    QJTInputCurrent->numOfEntries = structLineCnt;
     while(record != NULL)
        {
        recordSize=strlen(record);
-
-
        if(structColumnEntry == QJTInputDataPRIMARY_COLUMN)
             {
             QJTInputCurrent->primary = (char *)malloc(recordSize+2);
@@ -469,7 +647,7 @@ while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
             //copy 2 less characters to elimanate the CR at end of line
             entrySize = strlcpy(QJTInputCurrent->author , record, recordSize+1); 
             }
-        record = strtok(NULL,token);
+        record = strsep(&entry,token);
         structColumnEntry++;
         }   
      //malloc a new structure for next line
@@ -484,7 +662,6 @@ printf("%d QJT entries found in '%s'\n", structLineCnt-1,QJTFilename);
 fclose(fstream);
 }
 
-
 /* create final output structure*/
 /******************************************
 Function:
@@ -496,7 +673,10 @@ void createFinalStructureForOutput()
 {
 int structLineCnt=0;
 int entryfound=0;
+int epicFound=0;
 size_t stringSize;
+int epicMatches=0;
+
 //temporary buffer structure for copying
 struct ImportQJTFields ImportQJTFieldsData;
 struct ImportQJTFields *ImportQJTFieldsPtr;
@@ -504,9 +684,12 @@ ImportQJTFieldsPtr=&ImportQJTFieldsData;
 //initialize pointers
 jiraInputCurrent = jiraInputFirst;
 QJTInputCurrent = QJTInputFirst;
+epicInputCurrent = epicInputFirst;
+
 //start at second JIRA & QJT entry to get by text on first line
 jiraInputCurrent = jiraInputCurrent->next;
 QJTInputCurrent = QJTInputCurrent->next;
+epicInputCurrent = epicInputCurrent->next;
 
 ImportInputCurrent = ImportInputFirst;
 
@@ -518,14 +701,44 @@ printf("----------------------------------------------------------\n");
 while(jiraInputCurrent->next != NULL)
     {
     // lookupQJTEntry will return a pointer to temporary structure with field from QJT reuiqred to fill in Import structure
-    entryfound = lookupQJTEntry(ImportQJTFieldsPtr, jiraInputCurrent->primaryMod,jiraInputCurrent->numOfEntries);
+    entryfound = lookupQJTEntry(ImportQJTFieldsPtr, jiraInputCurrent->primaryMod);
     if(entryfound==1)
         {
-        stringSize = strlen(ImportQJTFieldsPtr->epicLink);
-        ImportInputCurrent->epicLink = (char *)malloc(stringSize+2);
-        memset(ImportInputCurrent->epicLink,0,stringSize+2);
-        strcpy(ImportInputCurrent->epicLink, ImportQJTFieldsPtr->epicLink);
+        ImportInputCurrent->numOfEntries = structLineCnt;
+        while(epicInputCurrent->next != NULL)
+            {
+            epicFound =  matchEpic(epicInputCurrent->summary,ImportQJTFieldsPtr->demandID);
+            stringSize = strlen(ImportQJTFieldsPtr->demandID);
+            if(epicFound != -1)
+                {
+                epicMatches++;
+                break;
+                }
+            epicInputCurrent = epicInputCurrent->next;
+            }
+        if(epicFound != -1)
+            {
+            stringSize = strlen(epicInputCurrent->issueKey);
+            ImportInputCurrent->epicLink = (char *)malloc(stringSize+2);
+            memset(ImportInputCurrent->epicLink,0,stringSize+2);
+            strcpy(ImportInputCurrent->epicLink, epicInputCurrent->issueKey);
 
+            stringSize = strlen(ImportQJTFieldsPtr->epicLink);
+            ImportInputCurrent->title = (char *)malloc(stringSize+2);
+            memset(ImportInputCurrent->title,0,stringSize+2);
+            strcpy(ImportInputCurrent->title, ImportQJTFieldsPtr->epicLink);
+            }
+        else{
+            stringSize = strlen(ImportQJTFieldsPtr->epicLink);
+            ImportInputCurrent->title = (char *)malloc(stringSize+2);
+            memset(ImportInputCurrent->title,0,stringSize+2);
+            strcpy(ImportInputCurrent->title, ImportQJTFieldsPtr->epicLink);
+
+            stringSize = strlen(ImportQJTFieldsPtr->epicLink);
+            ImportInputCurrent->epicLink = (char *)malloc(stringSize+2);
+            memset(ImportInputCurrent->epicLink,0,stringSize+2);
+            strcpy(ImportInputCurrent->epicLink, ImportQJTFieldsPtr->epicLink);
+            }
         stringSize = strlen(jiraInputCurrent->summary);
         ImportInputCurrent->summary = (char *)malloc(stringSize+2);
         memset(ImportInputCurrent->summary,0,stringSize+2);
@@ -578,18 +791,20 @@ while(jiraInputCurrent->next != NULL)
         }
     else
         {        
-        printf("Primary entry   %5s   line number %d in '%s' file not found in '%s' \n",jiraInputCurrent->primary,jiraInputCurrent->numOfEntries+1,jiraFilename,QJTFilename); 
+        printf("Primary entry   '%5s'   line number %d in '%s' was not found in '%s' \n",jiraInputCurrent->primary,jiraInputCurrent->numOfEntries+1,jiraFilename,QJTFilename); 
         }
+    epicInputCurrent = epicInputFirst;        
     jiraInputCurrent = jiraInputCurrent->next; 
     }
 //plus 1 on line count because first row is the header on not processed
-printf("%d JIRA entries found in '%s'\n", structLineCnt,QJTFilename);
+printf("%d JIRA entries found in '%s' and %d Epic matches\n", structLineCnt,QJTFilename,epicMatches);
 }
+
 /******************************************
 Function:
 Description:
 *******************************************/
-int lookupQJTEntry (struct ImportQJTFields *ImportQJTFieldsPtr, char* jiraPrimaryMod, int rowNumber)
+int lookupQJTEntry (struct ImportQJTFields *ImportQJTFieldsPtr, char* jiraPrimaryMod)
 {
 int i=0,x=0, nameLookupFound=0, entryfound=0;
 char name[1000];
@@ -633,7 +848,7 @@ if(stringSize >= 5)
                 {
                 strcpy(ImportQJTFieldsPtr->reporter, userNamesFirst->jiraUserName);
                 printf("\nUsername lookup failed for AssingedPM '%s' line %d of '%s' Primary %s\n",name, x+1,QJTFilename,jiraPrimaryMod);
-                printf("Assigning to %s\n\n",ImportQJTFieldsPtr->reporter);
+                printf("Assigning to %s\n",ImportQJTFieldsPtr->reporter);
                 }
             strcpy(ImportQJTFieldsPtr->ISBN, localQJTInputCurrent->ISBN);
             strcpy(ImportQJTFieldsPtr->demandID, localQJTInputCurrent->demandID);
@@ -649,6 +864,8 @@ if(stringSize >= 5)
     }
 return(entryfound);
 }
+
+
 /******************************************
 Function:
 Description: creates new structure and malloc memory for linked list
@@ -709,6 +926,25 @@ if( ptr == NULL)
 ptr->next = NULL;
 return(ptr);
 }
+/******************************************
+Function:
+Description:creates new structure and malloc memory for linked list
+*******************************************/
+
+struct epicInputData *createEpicStruct(void)
+{
+struct epicInputData *ptr;
+ptr = (struct epicInputData *)malloc(sizeof(struct epicInputData));
+memset(ptr,0,sizeof(struct epicInputData));
+
+if( ptr == NULL)
+    {
+    puts("\nInternal Memory Allocation Error\n");
+    exit(1);
+    }
+ptr->next = NULL;
+return(ptr);
+}
 
 /******************************************
 Function:
@@ -740,7 +976,9 @@ struct userNamesData *ptr = userNamesFirst;
 
 FILE *fp;
 int i=0;
-fp = fopen("NamesOutput.txt","w+");
+
+
+fp = fopen("./NamesOutput.csv","w+");
 if(fp == NULL)
     {
     printf("\n Failed to open file %s \n","NamesOutput.txt");
@@ -750,7 +988,7 @@ if(fp == NULL)
 while(ptr->next != NULL)
     {
     //remove entry number before shipping
-   fprintf(fp,"%d,%s,%s,%s",ptr->numOfEntries,ptr->userName, ptr->jiraUserName,ptr->pad);
+   fprintf(fp,"%d,%s,%s,%s,\n",ptr->numOfEntries,ptr->userName, ptr->jiraUserName,ptr->pad);
    ptr = ptr->next;
     i++;
     }
@@ -785,6 +1023,34 @@ while(ptr->next != NULL)
 
 fclose(fp);
 }
+/******************************************
+Function:
+Description:create output file used for debugging
+*******************************************/
+void saveEpicToFile(void)
+{
+struct epicInputData *ptr = epicInputFirst;
+
+FILE *fp;
+
+fp = fopen("EPICOutput.csv","w+");
+if(fp == NULL)
+    {
+    printf("\n Failed to open file %s \n","EPICOutput.csv");
+    printf("\n Please make sure permission to create file is available\n");
+    }
+//printf("print all lines \n");
+while(ptr->next != NULL)
+    {
+    //remove entry number before shipping
+    fprintf(fp,"%d,%s,%s,\n",ptr->numOfEntries,ptr->summary, ptr->issueKey);
+    ptr = ptr->next;
+    }
+ //printf("print all lines %d \n",i);
+
+fclose(fp);
+}
+
 /******************************************
 Function:
 Description:create output file used for debugging
@@ -878,24 +1144,23 @@ if(fp == NULL)
     printf("\n Failed to open file '%s' \n",finalOuputFilename);
     printf("\n Please make sure permission to create file is available\n");
     }
-printf("\n----------------------------------------------------------\n");
+printf("\n-------------------------------------------------------------------------------\n");
 printf("********** Creating '%s' **********\n",finalOuputFilename);
-printf("----------------------------------------------------------\n");
+printf("--------------------------------------------------------------------------------\n");
 
-fprintf(fp,"%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,\n","Project","Issue Type","Summary","Description","Epic Link","Severity","Reporter","Found In Environment","Found In Phase","Labels","Priority","Activity","Custom1","Custom2","Custom3","Custom4","Custom5","Edition","Primary");
+fprintf(fp,"%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,\n","Project","Issue Type","Summary","Description","Epic Link","Severity","Reporter","Found In Environment","Found In Phase","Labels","Priority","Activity","Custom1","Custom2","Custom3","Custom4","Custom5","Edition","Primary","Title");
 
 //printf("print all lines \n");
 while(ptr->next != NULL)
     {
     //remove entry number before shipping
-    fprintf(fp,"%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,\n","CSC_Pearson_Quality","Bug",ptr->summary,ptr->description,ptr->epicLink,"Medium",ptr->reporter,"QA","Production","L3","Minor","QA","SPi", ptr->ISBN, ptr->demandID, ptr->author,ptr->chapter,ptr->edition,ptr->primary);
+    fprintf(fp,"%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,\n","CSC_Pearson_Quality","Bug",ptr->summary,ptr->description,ptr->epicLink,"Medium",ptr->reporter,"QA","Production","L3","Minor","QA","SPi", ptr->ISBN, ptr->demandID, ptr->author,ptr->chapter,ptr->edition,ptr->primary,ptr->title);
 
 //printf("NUMBER of ENTRIES for QJT file=%d\n",i);
     i++;
     ptr = ptr->next;
     }
 printf("%d JIRA entries written to '%s'\n", i,finalOuputFilename);
-
 fclose(fp);
 }
 /******************************************
@@ -941,15 +1206,15 @@ printf("********** Scanning Final Output File '%s' **********\n",finalOuputFilen
 printf("----------------------------------------------------------\n");
 while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
     {
-   record = strtok(entry,token);
+    record = strsep(&entry,token);
     while(record != NULL)
         {
         recordSize=strlen(record);
-        if(strcmp (record, " ")== 0)
+        if(strcmp (record, "")== 0)
             { 
-            printf("Blank column value found at line %d column %s of file '%s'\n", structLineCnt+1,ImportOutputArray[structColumnEntry],finalOuputFilename);          
+            printf("Blank column value found at line %d column '%s' of file '%s'\n", structLineCnt+1,ImportOutputArray[structColumnEntry],finalOuputFilename);          
             }
-        record = strtok(NULL,token);
+        record = strsep(&entry,token);
         if(structColumnEntry == ImportOutputMaxColumns-1)
             // done scanning this row for blank column value
             break;
@@ -959,6 +1224,47 @@ while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
     structColumnEntry=0;
     }
 printf("%d lines processed in '%s'\n", structLineCnt-1,finalOuputFilename);
-
 fclose(fstream);
+}
+
+ 
+int matchEpic(char* ptrSummary, char* ptrDemandID) 
+{
+int c, d, e, text_length, pattern_length, position = -1;
+
+char text[400], pattern[100];
+
+text_length    = strlen(ptrSummary);
+pattern_length = strlen(ptrDemandID);
+
+strcpy(text,ptrSummary);
+strcpy(pattern,ptrDemandID);
+
+//printf("________________MATCHING  '%s' and '%s' \n",ptrDemandID,ptrSummary);
+  if (pattern_length > text_length || pattern_length < 5)
+    {
+    return -1;
+    }
+ //this loop walks thru the text, make sure DemandID is valid and the DeandID is not longer than string we are comapring against
+  for (c = 0; c <= text_length - pattern_length; c++) 
+    {
+    position = e = c;
+ //this loop compares text and pattern by character. if there's a match and pattern size if achived we have sucess
+    for (d = 0; d < pattern_length; d++) 
+        {
+        if (pattern[d] == text[e])  
+            {
+            e++;
+            }
+        else 
+            {
+            break;
+            }
+        }
+    if (d == pattern_length) 
+        {
+      return position;
+        }
+    }
+  return -1;
 }
