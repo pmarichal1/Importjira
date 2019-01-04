@@ -841,10 +841,7 @@ size_t stringSize=0;
 struct QJTInputData *localQJTInputCurrent;
 localQJTInputCurrent = QJTInputFirst;
 struct userNamesData *localUserNamesCurrent;
-struct userNamesData *localUserNamesFirst;
-
 localUserNamesCurrent = userNamesFirst;
-localUserNamesFirst=userNamesFirst;
 
 //check for valid primaryMod key and leave
 stringSize = strlen(jiraPrimaryMod);
@@ -1356,7 +1353,7 @@ void validateSizeofQJTFields(struct ImportQJTFields* ImportQJTFieldsData)
 char lineBuffer[lineBufferSize] ;
 const char token[3] = "\t";
 int structLineCnt=0,structColumnEntry=0;
-size_t  recordSize=0;
+int  recordSize=0;
 char *record,*entry;
 
 struct QJTFieldSize
@@ -1371,7 +1368,7 @@ struct QJTFieldSize
      int pad;
 	} ;
   
-struct QJTFieldSize QJTFieldSizeData ={0,0,0,0,0,0,0};
+struct QJTFieldSize QJTFieldSizeData ={0,0,0,0,0,0,0,0};
 
 FILE *fstream = fopen(QJTFilename,"r");
 
