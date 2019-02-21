@@ -205,7 +205,8 @@ char epicFilename[NumOfEpicFiles][pathSize] ={
                          "File2                               ",
                          "File3                               "
                      };
-char* finalOuputFilename;
+char finalOuputFilename[pathSize];
+char* programInputPath;
 FILE *fpError;
 char* myCWD;
 char debugflag[10]="0";
@@ -228,7 +229,6 @@ int main(int argc, char *argv[])
 
 {
 char outputErrors[pathSize];
-
 
 /* createJiraStruct first jira structure */
 jiraInputNewone = createJiraStruct();
@@ -267,6 +267,7 @@ if(argc < 9)
     fclose(fpError); 
     exit(1);
     }
+
 //assign all passed in argument to filenames we are going to sue
 jiraFilename = argv[1];
 QJTFilename = argv[2];
@@ -274,15 +275,18 @@ userNamesFilename = argv[3];
 strcpy(epicFilename[0], argv[4]);
 strcpy(epicFilename[1], argv[5]);
 strcpy(epicFilename[2], argv[6]);
-finalOuputFilename = argv[7];
+programInputPath = argv[7];
+strcpy(finalOuputFilename, programInputPath);
+strcat(finalOuputFilename, "JIRAImportData.txt");
+
 // get the current working directory so we can create and use absolute path names for files
 myCWD =  argv[8];
 if(argv[9] != NULL)
 	strcpy(debugflag,argv[9]);
 
 // open file to capture processing errors
-strcpy(outputErrors,myCWD);
-strcat(outputErrors,"/../JIRAinput/ProcessingErrors.txt");
+strcpy(outputErrors, programInputPath);
+strcat(outputErrors, "ProcessingErrors.txt");
 //printf("\n FILE %s \n",outputErrors);
 // open new file or delete it if it already exists
 fpError = fopen(outputErrors,"w+");
