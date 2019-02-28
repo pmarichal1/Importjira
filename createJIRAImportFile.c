@@ -26,12 +26,14 @@ SOFTWARE.
 
 
 #define jiraInputDataSHEETNAME_COLUMN 0
-#define jiraInputDataPRIMARY_COLUMN 1
-#define jiraInputDataCHAPTER_COLUMN 2
-#define jiraInputDataSUMMARY_COLUMN 3
-#define jiraInputDataADDITIONAL_COLUMN 4
-#define jiraInputDataPRIMARYMOD_COLUMN 5
-#define jiraInputDataPAD_COLUMN 6
+#define jiraInputDataSPECIALIST_COLUMN 1
+#define jiraInputDataFREELANCER_COLUMN 2
+#define jiraInputDataPRIMARY_COLUMN 3
+#define jiraInputDataCHAPTER_COLUMN 4
+#define jiraInputDataSUMMARY_COLUMN 5
+#define jiraInputDataADDITIONAL_COLUMN 6
+#define jiraInputDataPRIMARYMOD_COLUMN 7
+#define jiraInputDataPAD_COLUMN 8
 
 #define QJTInputDataPRIMARY_COLUMN 0
 #define QJTInputDataASSIGNEDPM_COLUMN 1
@@ -70,6 +72,8 @@ struct jiraInputData
  {
      int entryNumber;
      char *sheetName;
+     char *specialist;
+     char *freelancer;
      char *primary;
      char *chapter;
      char *summary;
@@ -466,35 +470,49 @@ while((entry=fgets(lineBuffer,sizeof(lineBuffer),fstream))!=NULL)
        {
        recordSize=strlen(record);
 
-       if(structColumnEntry == jiraInputDataSHEETNAME_COLUMN)
+        if(structColumnEntry == jiraInputDataSHEETNAME_COLUMN)
             {
             jiraInputCurrent->sheetName = (char *)malloc(recordSize+2);
             checkMalloc(jiraInputCurrent->sheetName);
             memset(jiraInputCurrent->sheetName,0,recordSize+2);
             strlcpy(jiraInputCurrent->sheetName , record, recordSize+1);
             }
-	   else if(structColumnEntry == jiraInputDataPRIMARY_COLUMN)
+        else if(structColumnEntry == jiraInputDataSPECIALIST_COLUMN)
+            {
+            jiraInputCurrent->specialist = (char *)malloc(recordSize+2);
+            checkMalloc(jiraInputCurrent->specialist);
+            memset(jiraInputCurrent->specialist,0,recordSize+2);
+            strlcpy(jiraInputCurrent->specialist , record, recordSize+1);
+            }
+        else if(structColumnEntry == jiraInputDataFREELANCER_COLUMN)
+            {
+            jiraInputCurrent->freelancer = (char *)malloc(recordSize+2);
+            checkMalloc(jiraInputCurrent->freelancer);
+            memset(jiraInputCurrent->freelancer,0,recordSize+2);
+            strlcpy(jiraInputCurrent->freelancer , record, recordSize+1);
+            }
+        else if(structColumnEntry == jiraInputDataPRIMARY_COLUMN)
             {
             jiraInputCurrent->primary = (char *)malloc(recordSize+2);
             checkMalloc(jiraInputCurrent->primary);
             memset(jiraInputCurrent->primary,0,recordSize+2);
             strlcpy(jiraInputCurrent->primary , record, recordSize+1);
             }
- 	   else if(structColumnEntry == jiraInputDataCHAPTER_COLUMN)
+        else if(structColumnEntry == jiraInputDataCHAPTER_COLUMN)
             {
             jiraInputCurrent->chapter = (char *)malloc(recordSize+2);
             checkMalloc(jiraInputCurrent->chapter);
             memset(jiraInputCurrent->chapter,0,recordSize+2);
             strlcpy(jiraInputCurrent->chapter , record, recordSize+1);
             }
-	   else if(structColumnEntry == jiraInputDataSUMMARY_COLUMN)
+        else if(structColumnEntry == jiraInputDataSUMMARY_COLUMN)
             {
             jiraInputCurrent->summary = (char *)malloc(recordSize+2);
             checkMalloc(jiraInputCurrent->summary);
             memset(jiraInputCurrent->summary,0,recordSize+2);
             strlcpy(jiraInputCurrent->summary , record, recordSize+1); 
             }
-	   else if(structColumnEntry == jiraInputDataADDITIONAL_COLUMN)
+        else if(structColumnEntry == jiraInputDataADDITIONAL_COLUMN)
             {
             jiraInputCurrent->additional = (char *)malloc(recordSize+2);
             checkMalloc(jiraInputCurrent->additional);
@@ -796,8 +814,6 @@ while(jiraInputCurrent->next != NULL)
                 }
             else
             	{
-                printf("\e[0;35m DemandID   '%-12s' line %3d in '%s' not found in Jira Epic files\e[0m \n",ImportQJTFieldsPtr->demandID,jiraInputCurrent->entryNumber+1,jiraFilename);
-                fprintf(fpError, "DemandID   '%-12s' line %3d in '%s' not found in Jira Epic files\n",ImportQJTFieldsPtr->demandID,jiraInputCurrent->entryNumber+1,jiraFilename);
 				break;
 				}
             // if matchEpic return a match then stop looking through the list
@@ -942,7 +958,6 @@ stringSize = strlen(jiraPtr->primaryMod);
 //check to make sure PrimaryMod is valid
 if(stringSize >= 5)
     {
-
     while(localQJTInputCurrent->next != NULL)
         {
         // Look for a match between jira Primary and QJT primary which usually have a suffix "-C, -P, -I"   
@@ -950,7 +965,8 @@ if(stringSize >= 5)
             {
             entryfound=1;
             strcpy(ImportQJTFieldsPtr->epicLink, localQJTInputCurrent->title);
-            strcpy(name, localQJTInputCurrent->assignedPM);
+            // Using Editorial Quality Specialist from ALL JIRA Bugs files
+            strcpy(name, jiraPtr->specialist);
             while(localUserNamesCurrent->next != NULL)
                 {
                 //set this to 1 to get us out of loop
@@ -1369,7 +1385,7 @@ Description: This function creates the output file that will be used by JIRA to 
 void createPerUserOutputFileForJIRAImport (void)
 {
 struct ImportInputData *ptr = ImportInputFirst;
-int rowCnt=0, ret=0;
+int rowCnt=0;
 FILE *fp;
 char tempName[pathSize];
 size_t recordSize=0;
@@ -1413,7 +1429,7 @@ while (userNamesCurrent->next != NULL)
     fclose(fp);
     // if file is empty then delete file
     if(rowCnt == 0)
-        ret = remove(tempName);
+        remove(tempName);
     else{
         printf("********** Creating '%s' **********\n",tempName);
         printf("\e[1;32m %d \e[0m JIRA entries written to '%s'\n", rowCnt,tempName);
